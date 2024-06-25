@@ -411,7 +411,7 @@ export default {
         },
         // Debounced (delayed) functions
         onDataPointAmountChange: debounce(function () {
-            this.initData(this.clusterAmount, this.dataPointsAmount);
+            this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
             this.initScale();
             this.drawAxis();
             this.drawVoronoi();
@@ -421,7 +421,7 @@ export default {
         }, 500),
 
         onClusterAmountChange: debounce(function () {
-            this.initData(this.clusterAmount, this.dataPointsAmount);
+            this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
             this.drawVoronoi();
 
             this.drawCentroids();
