@@ -14,7 +14,7 @@
         <v-text-field v-if="isCircularData" v-model="circleAmount" label="Amount of circles" :rules="rules" />
 
         <div class="buttons">
-            <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning || isConverged"> Start </v-btn>
+            <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning"> Start </v-btn>
 
             <v-btn variant="outlined" color="red" @click="stop" :disabled="!isRunning"> Stop </v-btn>
 
