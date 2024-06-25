@@ -2,7 +2,7 @@
     <div id="container"></div>
 
     <div class="inputs">
-        <v-switch v-model="displayVoronoi" label="Draw Voronoi borders" :color="displayVoronoi ? 'primary' : 'error'"></v-switch>
+        <v-switch v-model="displayVoronoi" label="Display Voronoi borders" :color="displayVoronoi ? 'primary' : 'error'"></v-switch>
 
         <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="rules" />
 
@@ -10,8 +10,11 @@
 
         <v-text-field v-model="iterationAmount" label="Maximum amount of iterations" :rules="rules" />
 
+        <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
+        <v-text-field v-if="isCircularData" v-model="circleAmount" label="Amount of circles" :rules="rules" />
+
         <div class="buttons">
-            <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning"> Start </v-btn>
+            <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning || isConverged"> Start </v-btn>
 
             <v-btn variant="outlined" color="red" @click="stop" :disabled="!isRunning"> Stop </v-btn>
 
@@ -22,14 +25,24 @@
 
 <script>
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
-import { initializeData, svgAttributes, nearestCentroid, average } from "../utils/kmeans-helpers.js";
+import { 
+    initializeRandomData, 
+    initializeCentroids,
+    svgAttributes, 
+    nearestCentroid, 
+    average, 
+    initializeCircularData 
+} from "../utils/kmeans-helpers.js";
 import { debounce } from 'lodash';
 
 const DEFAULT_DATA_AMOUNT = 100;
 const DEFAULT_CLUSTER_AMOUNT = 3;
 const DEFAULT_ITERATION_AMOUNT = 10;
 const CONVERGENCE_THRESHOLD = 0.001;
+const DEFAULT_DISTRIBUTION = 'Random'
 const COLOUR = d3.scaleOrdinal(d3.schemeCategory10);
+
+const DEFAULT_CIRCLES_AMOUNT = 3;
 
 export default {
     data() {
@@ -46,6 +59,8 @@ export default {
             clusterAmount: DEFAULT_CLUSTER_AMOUNT,
             dataPointsAmount: DEFAULT_DATA_AMOUNT,
             iterationAmount: DEFAULT_ITERATION_AMOUNT,
+            distribution: DEFAULT_DISTRIBUTION,
+            circleAmount: DEFAULT_CIRCLES_AMOUNT,
             displayVoronoi: false,
 
             iterationHelper: null,
@@ -84,6 +99,14 @@ export default {
 
         isRunning() {
             return this.interval ? true : false;
+        },
+
+        distributionOptions() {
+            return ['Random', 'Circular'];
+        },
+
+        isCircularData(){
+            return this.distribution === 'Circular';
         }
     },
     watch: {
@@ -106,6 +129,14 @@ export default {
         'displayVoronoi'(value){
             this.displayVoronoi = value;
             this.drawVoronoi();
+        },
+
+        'distribution'(){
+            this.onDistributionChange();
+        },
+
+        'circleAmount'() {
+            this.onCircleAmountChange();
         }
     },
 
@@ -128,8 +159,18 @@ export default {
     },
 
     methods: {
-        initData(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT) {
-            const { centroids, data } = initializeData(clusterCount, dataPointsCount);
+        initData(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT, distribution = DEFAULT_DISTRIBUTION) {
+            const centroids = initializeCentroids(clusterCount, dataPointsCount);
+            let data = [];
+
+
+            if (distribution === 'Random') {
+                data = initializeRandomData(dataPointsCount);
+            }
+
+            if(distribution === 'Circular') {
+                data = initializeCircularData(dataPointsCount, this.circleAmount || DEFAULT_CIRCLES_AMOUNT)
+            }
 
             this.centroids = centroids;
             this.dataPoints = data;
@@ -236,7 +277,7 @@ export default {
         updateClusters() {
 
             this.dataPoints.forEach((dataPoint) => {
-                dataPoint.cluster = nearestCentroid(dataPoint);
+                dataPoint.cluster = nearestCentroid(dataPoint, this.centroids);
 
                 this.domNodes.style('fill', n => COLOUR(n.cluster));
             });
@@ -279,7 +320,7 @@ export default {
                 if (this.isConverged) {
                     clearInterval(this.interval);
                     this.interval = null;
-                    console.log(`Converged after ${this.iterationHelper} iterations`);
+                    console.log(`Converged after ${this.iterationAmount - this.iterationHelper} iterations`);
 
                     return;
                 }
@@ -300,7 +341,7 @@ export default {
         reset() {
             clearInterval(this.interval);
             this.interval = null;
-            this.initData(this.clusterAmount, this.dataPointsAmount);
+            this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
 
             this.domNodes = this.graphContainer.select('#nodes')
                 .selectAll('.node')
@@ -358,7 +399,24 @@ export default {
 
             this.drawCentroids();
             this.drawDataPoints();
-        }, 500)
+        }, 500),
+
+        onDistributionChange: debounce(function () {
+            this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+            this.drawVoronoi();
+
+            this.drawCentroids();
+            this.drawDataPoints();
+        }, 500),
+
+        onCircleAmountChange: debounce(function () {
+            this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+            this.drawVoronoi();
+
+            this.drawCentroids();
+            this.drawDataPoints();
+        }, 500),
+        
     }
 }
 </script>
