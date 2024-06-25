@@ -13,7 +13,7 @@ function euclideanDistance(a, b) {
 }
 
 // Determine closest centroid and assign to cluster
-export function nearestCentroid(node) {
+export function nearestCentroid(node, centroids) {
     let distances = centroids.map((c) => euclideanDistance(c, node));
     return distances.findIndex(distance => distance === Math.min(...distances));
 }
@@ -32,17 +32,63 @@ export function average(values) {
     return sum / values.length;
 }
 
-export function initializeData(clusters, dataPointAmount) {
+export function initializeCentroids(clusters, dataPointAmount) {
     let centroids = d3.range(clusters).map(() => ({
         x: Math.floor(Math.random() * dataPointAmount),
         y: Math.floor(Math.random() * dataPointAmount),
     }));
 
+    return centroids;
+}
+
+export function initializeRandomData(dataPointAmount) {
     let data = d3.range(dataPointAmount).map(() => ({
         x: Math.floor(Math.random() * dataPointAmount),
         y: Math.floor(Math.random() * dataPointAmount),
         cluster: null
     }));
+    return data;
+}
 
-    return {centroids, data};
+function isValidCenter(newCenter, centers, minDistance) {
+    return centers.every(center => {
+        const distance = Math.sqrt(
+            Math.pow(center.x - newCenter.x, 2) + Math.pow(center.y - newCenter.y, 2)
+        );
+        return distance >= minDistance;
+    });
+}
+
+export function initializeCircularData(dataPointAmount, circles) {
+    const RADIUS = 8;
+    const MIN_DISTANCE = 2 * RADIUS;
+    let angle = null;
+    let radius = null;
+
+    let validCenters = []
+
+    while (validCenters.length < circles){
+        let potentialCenter = {
+            x: Math.floor(Math.random() * (dataPointAmount - 2 * RADIUS)) + RADIUS,
+            y: Math.floor(Math.random() * (dataPointAmount - 2 * RADIUS)) + RADIUS,
+        };
+
+        if (isValidCenter(potentialCenter, validCenters, MIN_DISTANCE)){
+            validCenters.push(potentialCenter);
+        }
+    }
+
+    let data = validCenters.flatMap(center => 
+        d3.range(Math.floor(dataPointAmount / circles)).map(() => {
+            angle = Math.random() * 2 * Math.PI;
+            radius = RADIUS * Math.sqrt(Math.random());
+            return {
+                x: center.x + radius * Math.cos(angle),
+                y: center.y + radius * Math.sin(angle),
+                cluster: null
+            };
+        })
+    );
+
+    return data;
 }
