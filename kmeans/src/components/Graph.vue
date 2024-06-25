@@ -2,7 +2,8 @@
     <div id="container"></div>
 
     <div class="inputs">
-        <v-switch v-model="displayVoronoi" label="Display Voronoi borders" :color="displayVoronoi ? 'primary' : 'error'"></v-switch>
+        <v-switch v-model="displayVoronoi" label="Display Voronoi borders"
+            :color="displayVoronoi ? 'primary' : 'error'"></v-switch>
 
         <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="rules" />
 
@@ -20,18 +21,28 @@
 
             <v-btn variant="outlined" color="primary" @click="reset"> Reset </v-btn>
         </div>
+
+        <v-snackbar v-model="toast" :timeout="timeout">
+            {{ toastMessage }}
+
+            <template v-slot:actions>
+                <v-btn color="black" variant="text" @click="showHideToast">
+                    Close
+                </v-btn>
+            </template>
+        </v-snackbar>
     </div>
 </template>
 
 <script>
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
-import { 
-    initializeRandomData, 
+import {
+    initializeRandomData,
     initializeCentroids,
-    svgAttributes, 
-    nearestCentroid, 
-    average, 
-    initializeCircularData 
+    svgAttributes,
+    nearestCentroid,
+    average,
+    initializeCircularData
 } from "../utils/kmeans-helpers.js";
 import { debounce } from 'lodash';
 
@@ -78,7 +89,12 @@ export default {
             ],
 
             //Interval for interval running
-            interval: null
+            interval: null,
+
+            // Toast message
+            toast: false,
+            toastMessage: null,
+            toastTimeout: 2000
         }
     },
 
@@ -105,9 +121,9 @@ export default {
             return ['Random', 'Circular'];
         },
 
-        isCircularData(){
+        isCircularData() {
             return this.distribution === 'Circular';
-        }
+        },
     },
     watch: {
         'dataPointsAmount'(value) {
@@ -126,12 +142,12 @@ export default {
             this.iterationHelper = value;
         },
 
-        'displayVoronoi'(value){
+        'displayVoronoi'(value) {
             this.displayVoronoi = value;
             this.drawVoronoi();
         },
 
-        'distribution'(){
+        'distribution'() {
             this.onDistributionChange();
         },
 
@@ -168,7 +184,7 @@ export default {
                 data = initializeRandomData(dataPointsCount);
             }
 
-            if(distribution === 'Circular') {
+            if (distribution === 'Circular') {
                 data = initializeCircularData(dataPointsCount, this.circleAmount || DEFAULT_CIRCLES_AMOUNT)
             }
 
@@ -308,7 +324,9 @@ export default {
                 if (this.iterationHelper <= 0) {
                     clearInterval(this.interval);
                     this.interval = null;
-                    console.log('Reached maximum iterations');
+
+                    this.toastMessage = 'Reached maximum iterations';
+                    this.showHideToast();
 
                     return;
                 }
@@ -320,7 +338,9 @@ export default {
                 if (this.isConverged) {
                     clearInterval(this.interval);
                     this.interval = null;
-                    console.log(`Converged after ${this.iterationAmount - this.iterationHelper} iterations`);
+
+                    this.toastMessage = `Converged after ${this.iterationAmount - this.iterationHelper} iterations`;
+                    this.showHideToast();
 
                     return;
                 }
@@ -334,13 +354,16 @@ export default {
             if (this.interval) {
                 clearInterval(this.interval);
                 this.interval = null;
-                console.log('Stopped');
+
+                this.toastMessage = 'Stopped';
+                this.showHideToast();
             }
         },
 
         reset() {
             clearInterval(this.interval);
             this.interval = null;
+
             this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
 
             this.domNodes = this.graphContainer.select('#nodes')
@@ -379,8 +402,12 @@ export default {
                         .attr('cy', (centroid) => this.yLinearScale(centroid.y)),
                     exit => exit.remove()
                 );
-            
+
             this.drawVoronoi();
+        },
+
+        showHideToast() {
+            this.toast = !this.toast;
         },
         // Debounced (delayed) functions
         onDataPointAmountChange: debounce(function () {
@@ -416,7 +443,7 @@ export default {
             this.drawCentroids();
             this.drawDataPoints();
         }, 500),
-        
+
     }
 }
 </script>
