@@ -92,3 +92,39 @@ export function initializeCircularData(dataPointAmount, circles) {
 
     return data;
 }
+export function initializeGaussianData(dataPointAmount, clusters) {
+    let data = [];
+    const clusterCenters = initializeCentroids(clusters, dataPointAmount);
+    const variance = dataPointAmount * 0.02;
+    const gaussian = d3.randomNormal(0, Math.sqrt(variance));
+
+    clusterCenters.forEach(center => {
+        let clusterData = d3.range(dataPointAmount / clusters).map(() => ({
+            x: center.x + gaussian(),
+            y: center.y + gaussian(),
+            cluster: null
+        }));
+        data = data.concat(clusterData);
+    });
+
+    return data;
+}
+
+
+export function initializeGridData(dataPointAmount, clusters) {
+    const gridSize = Math.ceil(Math.sqrt(dataPointAmount));
+    let data = [];
+
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            if (data.length >= dataPointAmount) break;
+            data.push({
+                x: i * (svgAttributes.width / gridSize),
+                y: j * (svgAttributes.height / gridSize),
+                cluster: null
+            });
+        }
+    }
+
+    return data;
+}
