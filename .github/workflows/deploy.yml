@@ -1,4 +1,4 @@
-name: K-means Deployment
+name: Kmeans
 
 on:
   push:
@@ -29,17 +29,17 @@ jobs:
           node-version: 20
           cache: 'npm'
       - name: Install dependencies
-        run: npm ci
-        working-directory: ./kmeans
+        run: npm install
+        working-directory: ./kmeans-visualization-app
       - name: Build
         run: npm run build
-        working-directory: ./kmeans
+        working-directory: ./kmeans-visualization-app
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './kmeans/dist'
+          path: './kmeans-visualization-app/dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
