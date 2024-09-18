@@ -8,6 +8,10 @@ export const svgAttributes = {
     height: 600
 };
 
+function addJitter(value) {
+    return value + Math.floor(Math.random() * 3);
+}
+
 function euclideanDistance(a, b) {
     return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
@@ -59,8 +63,8 @@ function isValidCenter(newCenter, centers, minDistance) {
     });
 }
 
-export function initializeCircularData(dataPointAmount, circles) {
-    const RADIUS = 8;
+export function initializeCircularData(dataPointAmount, circles, radiusInput) {;
+    const RADIUS = Number(radiusInput);
     const MIN_DISTANCE = 2 * RADIUS;
     let angle = null;
     let radius = null;
@@ -92,10 +96,11 @@ export function initializeCircularData(dataPointAmount, circles) {
 
     return data;
 }
-export function initializeGaussianData(dataPointAmount, clusters) {
+
+export function initializeGaussianData(dataPointAmount, clusters, varianceAmount) {
     let data = [];
     const clusterCenters = initializeCentroids(clusters, dataPointAmount);
-    const variance = dataPointAmount * 0.02;
+    const variance = dataPointAmount * varianceAmount;
     const gaussian = d3.randomNormal(0, Math.sqrt(variance));
 
     clusterCenters.forEach(center => {
@@ -128,3 +133,108 @@ export function initializeGridData(dataPointAmount, clusters) {
 
     return data;
 }
+
+export function initializeConcentricData(dataPointAmount, circleAmount) {
+    const centerX = dataPointAmount * 5;
+    const centerY = dataPointAmount * 5;
+    const maxRadius = Math.min(centerX, centerY) * 0.9;
+    
+    let data = [];
+    const pointsPerCircle = Math.floor(dataPointAmount / circleAmount);
+    const angleIncrement = (2 * Math.PI) / pointsPerCircle;
+
+    for (let i = 1; i <= circleAmount; i++) {
+        const radius = (i / circleAmount) * maxRadius;
+        
+        for (let j = 0; j < pointsPerCircle; j++) {
+            const angle = j * angleIncrement;
+            data.push({
+                x: addJitter((centerX + radius * Math.cos(angle)) / 10),
+                y: addJitter((centerY + radius * Math.sin(angle)) / 10),
+                cluster: null
+            });
+        }
+    }
+    return data;
+}
+
+export function initializeCrescentData(dataPointAmount) {
+    const centerX = dataPointAmount / 2;
+    const centerY = dataPointAmount / 2;
+
+    const maxRadius = Math.min(centerX, centerY) * 0.5;
+
+    const angle = Math.PI;
+    let data = [];
+    
+    for (let i = 0; i <= dataPointAmount / 2; i++) {
+        let theta = angle * (i / (dataPointAmount / 2));
+        let x = centerX + maxRadius * Math.cos(theta);
+        let y = centerY + maxRadius * Math.sin(theta);
+        data.push({ 
+            x: addJitter(x),
+            y: addJitter(y),
+            cluster: null
+        });
+    }
+    
+    for (let i = 0; i <= dataPointAmount / 2; i++) {
+        let theta = Math.PI + angle * (i / (dataPointAmount / 2));
+        let x = (dataPointAmount / 5) + centerX + maxRadius * Math.cos(theta);
+        let y = centerY + maxRadius * Math.sin(theta);
+        data.push({ 
+            x: addJitter(x),
+            y: addJitter(y),
+            cluster: null
+        });
+    }
+    
+    return data;
+}
+
+export function initializeEyeData(dataPointAmount) {
+    const centerX = dataPointAmount / 2;
+    const centerY = dataPointAmount / 2;
+
+    const eyeWidth = dataPointAmount;
+    const eyeHeight = dataPointAmount * 0.5;
+
+    const irisRadius = 5;
+    
+    let data = [];
+
+    const eyelidPoints = Math.floor(dataPointAmount * 0.7);
+    for (let i = 0; i < eyelidPoints; i++) {
+        let angle, r;
+        if (i < eyelidPoints / 2) {
+            angle = Math.PI * (Math.random() * 0.5 + 0.25);
+            r = (eyeWidth / 2) * Math.pow(Math.sin(angle), 0.4);
+        } else {
+            angle = Math.PI * (Math.random() * 0.5 + 1.25);
+            r = (eyeWidth / 2) * Math.pow(Math.sin(Math.PI + angle), 0.4);
+        }
+        const x = centerX + r * Math.cos(angle);
+        const y = centerY + (r * Math.sin(angle) * (eyeHeight / eyeWidth));
+        data.push({
+            x: addJitter(x),
+            y: addJitter(y),
+            cluster: null
+        });
+    }
+
+
+    const irisPoints = Math.floor(dataPointAmount * 0.3);
+    for (let i = 0; i < irisPoints; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const r = irisRadius * Math.pow(Math.random(), 0.3);
+        const x = centerX + r * Math.cos(angle);
+        const y = centerY + r * Math.sin(angle);
+        data.push({
+            x: addJitter(x),
+            y: addJitter(y),
+            cluster: null
+        });
+    }
+    return data;
+}
+

@@ -1,25 +1,48 @@
 <template>
-  <div id="container"></div>
+  <div class="wrapper">
+    <div id="container"></div>
+    <div class="controls" v-if="false">
+      <v-btn class="rounded"variant="outlined" icon="mdi-chevron-double-left" color="primary"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary"/>
+    </div>
+  </div>
 
   <div class="inputs">
     <v-switch v-model="displayVoronoi" label="Display Voronoi borders"
-              :color="displayVoronoi ? 'primary' : 'error'"></v-switch>
+              :color="displayVoronoi ? 'primary' : 'error'"/>
 
-    <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="rules"/>
+    <v-form ref="form" validate-on="input">
+      <v-text-field v-model="iterationSpeed" label="Iteration speed (seconds)"
+      :disabled="isRunning"
+      placeholder="Enter iteration speed in seconds"
+      :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"/>
 
-    <v-text-field v-model="dataPointsAmount" label="Amount of data points" :rules="rules"/>
+      <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="[rules.required, rules.mustBeInteger]"/>
+  
+      <v-text-field v-model="dataPointsAmount" label="Amount of data points" :rules="[rules.required, rules.mustBeInteger]"/>
+  
+      <v-text-field v-model="iterationAmount" label="Maximum amount of iterations" :rules="[rules.required, rules.mustBeInteger]"/>
+  
+      <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
 
-    <v-text-field v-model="iterationAmount" label="Maximum amount of iterations" :rules="rules"/>
+      <div v-if="isCircularData || isConcentricData" class="circularInputs">
+        <v-text-field class="amountInput" v-model="circleAmount" label="Amount of circles" :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]"/>
+        <v-text-field v-if="isCircularData" class="radiusInput" v-model="circleRadius" label="Circle radius" :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]"/>
+      </div>
 
-    <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
-    <v-text-field v-if="isCircularData" v-model="circleAmount" label="Amount of circles" :rules="rules"/>
-
+      <v-text-field v-if="isGaussianData" v-model="gaussianVariance" label="Variance" :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"/>
+    </v-form>
+    
     <div class="buttons">
       <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning"> Start</v-btn>
 
       <v-btn variant="outlined" color="red" @click="stop" :disabled="!isRunning"> Stop</v-btn>
 
-      <v-btn variant="outlined" color="primary" @click="reset"> Reset</v-btn>
+      <v-btn variant="outlined" color="warning" @click="reset"> Reset</v-btn>
+
+      <v-btn class="resetButton" variant="text" color="primary" @click="resetInputs" :disabled="isRunning"> Reset inputs</v-btn>
     </div>
 
     <v-snackbar v-model="toast" :timeout="timeout">
@@ -42,18 +65,26 @@ import {
   svgAttributes,
   nearestCentroid,
   average,
-  initializeCircularData, initializeGaussianData, initializeGridData
+  initializeCircularData,
+  initializeGaussianData,
+  initializeGridData,
+  initializeConcentricData,
+  initializeCrescentData,
+  initializeEyeData
 } from "../utils/kmeans-helpers.js";
-import {debounce} from 'lodash';
+import {debounce, isFinite} from 'lodash';
 
 const DEFAULT_DATA_AMOUNT = 100;
 const DEFAULT_CLUSTER_AMOUNT = 3;
 const DEFAULT_ITERATION_AMOUNT = 10;
 const CONVERGENCE_THRESHOLD = 0.001;
-const DEFAULT_DISTRIBUTION = 'Random'
-const COLOUR = d3.scaleOrdinal(d3.schemeCategory10);
-
+const DEFAULT_DISTRIBUTION = 'Random';
+const DEFAULT_RADIUS = 8;
 const DEFAULT_CIRCLES_AMOUNT = 3;
+const DEFAULT_VARIANCE = 0.1;
+const DEFAULT_SPEED = 2;
+
+const COLOUR = d3.scaleOrdinal(d3.schemeCategory10);
 
 export default {
   data() {
@@ -72,6 +103,10 @@ export default {
       iterationAmount: DEFAULT_ITERATION_AMOUNT,
       distribution: DEFAULT_DISTRIBUTION,
       circleAmount: DEFAULT_CIRCLES_AMOUNT,
+      circleRadius: DEFAULT_RADIUS,
+      gaussianVariance: DEFAULT_VARIANCE,
+      iterationSpeed: DEFAULT_SPEED,
+
       displayVoronoi: false,
 
       iterationHelper: null,
@@ -83,10 +118,12 @@ export default {
       yLinearScale: null,
 
       //Input rules
-      rules: [
-        inputValue => !!inputValue || 'Required',
-        inputValue => (inputValue && !isNaN(parseInt(inputValue))) || 'Input must be an Integer'
-      ],
+      rules: {
+        required: inputValue => !!inputValue || 'Required',
+        mustBeInteger: inputValue => (inputValue && !isNaN(parseInt(inputValue))) || 'Input must be an Integer',
+        mustBeNumber: inputValue => isFinite(parseFloat(inputValue)) || 'Input must be a finite number',
+        mustBePositive: inputValue => parseFloat(inputValue) >= 0 || 'Input must be a positive number'
+      },
 
       //Interval for interval running
       interval: null,
@@ -118,12 +155,20 @@ export default {
     },
 
     distributionOptions() {
-      return ['Random', 'Circular', 'Gaussian', 'Grid'];
+      return ['Random', 'Circular', 'Gaussian', 'Grid', 'Concentric', 'Crescent', 'Eye'];
     },
 
     isCircularData() {
       return this.distribution === 'Circular';
     },
+
+    isGaussianData() {
+      return this.distribution === 'Gaussian';
+    },
+
+    isConcentricData() {
+      return this.distribution == 'Concentric'
+    }
   },
   watch: {
     'dataPointsAmount'(value) {
@@ -135,7 +180,7 @@ export default {
     'clusterAmount'(value) {
       // After input change, call the re-draw function after 500ms
       this.clusterAmount = value;
-      this.onClusterAmountChange();
+      this.onChange();
     },
 
     'iterationAmount'(value) {
@@ -148,12 +193,20 @@ export default {
     },
 
     'distribution'() {
-      this.onDistributionChange();
+      this.onChange();
     },
 
     'circleAmount'() {
-      this.onCircleAmountChange();
-    }
+      this.onChange();
+    },
+
+    'gaussianVariance'() {
+      this.onChange();
+    },
+
+    'circleRadius'() {
+      this.onChange();
+    },
   },
 
   beforeMount() {
@@ -185,14 +238,27 @@ export default {
       }
 
       if (distribution === 'Circular') {
-        data = initializeCircularData(dataPointsCount, this.circleAmount || DEFAULT_CIRCLES_AMOUNT)
+        data = initializeCircularData(dataPointsCount, this.circleAmount, this.circleRadius);
       }
+
       if (distribution === 'Gaussian') {
-        data = initializeGaussianData(dataPointsCount, clusterCount);
+        data = initializeGaussianData(dataPointsCount, clusterCount, this.gaussianVariance);
       }
 
       if (distribution === 'Grid') {
         data = initializeGridData(dataPointsCount, clusterCount);
+      }
+
+      if (distribution === 'Concentric') {
+        data = initializeConcentricData(dataPointsCount, this.circleAmount)
+      }
+
+      if (distribution === 'Crescent') {
+        data = initializeCrescentData(dataPointsCount);
+      }
+
+      if (distribution === 'Eye') {
+        data = initializeEyeData(dataPointsCount);
       }
 
       this.centroids = centroids;
@@ -200,7 +266,6 @@ export default {
     },
 
     initScale() {
-
       this.linearDomain = [0, this.dataPointsAmount];
 
       this.xLinearScale = d3.scaleLinear().domain(this.linearDomain).range([0, svgAttributes.width]);
@@ -322,7 +387,15 @@ export default {
           .attr('cy', c => this.yLinearScale(c.y));
     },
 
-    start() {
+    async start() {
+      const { valid } = await this.$refs.form.validate();
+      if (!valid) {
+        this.toastMessage = "Please provide the correct inputs. Program halted!";
+        this.showHideToast();
+
+        return;
+      }
+
       this.previousCentroids = this.centroids.map(c => ({x: c.x, y: c.y}));
       this.updateClusters();
       this.drawVoronoi();
@@ -354,7 +427,7 @@ export default {
 
         this.previousCentroids = this.centroids.map(c => ({x: c.x, y: c.y}));
         this.iterationHelper--;
-      }, 3000);
+      }, this.iterationSpeed * 1000);
     },
 
     stop() {
@@ -416,6 +489,18 @@ export default {
     showHideToast() {
       this.toast = !this.toast;
     },
+
+    resetInputs() {
+      this.clusterAmount = DEFAULT_CLUSTER_AMOUNT;
+      this.dataPointsAmount = DEFAULT_DATA_AMOUNT;
+      this.iterationAmount = DEFAULT_ITERATION_AMOUNT;
+      this.distribution = DEFAULT_DISTRIBUTION;
+      this.circleAmount = DEFAULT_CIRCLES_AMOUNT;
+      this.circleRadius = DEFAULT_RADIUS;
+      this.gaussianVariance = DEFAULT_VARIANCE;
+      this.iterationSpeed = DEFAULT_SPEED;
+    },
+
     // Debounced (delayed) functions
     onDataPointAmountChange: debounce(function () {
       this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
@@ -423,39 +508,36 @@ export default {
       this.drawAxis();
       this.drawVoronoi();
 
-      this.drawCentroids();
       this.drawDataPoints();
+      this.drawCentroids();
     }, 500),
 
-    onClusterAmountChange: debounce(function () {
+    onChange: debounce(function () {
       this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
       this.drawVoronoi();
 
-      this.drawCentroids();
       this.drawDataPoints();
-    }, 500),
-
-    onDistributionChange: debounce(function () {
-      this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
-      this.drawVoronoi();
-
       this.drawCentroids();
-      this.drawDataPoints();
     }, 500),
-
-    onCircleAmountChange: debounce(function () {
-      this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
-      this.drawVoronoi();
-
-      this.drawCentroids();
-      this.drawDataPoints();
-    }, 500),
-
   }
 }
 </script>
 
 <style scoped>
+.wrapper { 
+  display: flex;
+  flex-direction: column;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: auto;
+
+  width: 350px;
+}
+
 .inputs {
   display: flex;
   flex-direction: column;
@@ -467,5 +549,25 @@ export default {
 .buttons {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
+
+  gap: 10px;
+}
+
+.resetButton {
+  margin: auto;
+}
+
+.circularInputs {
+  display: flex;
+  justify-content: space-between;
+}
+
+.amountInput {
+  margin-right: 5px;
+}
+
+.radiusInput {
+  margin-left: 5px;
 }
 </style>
