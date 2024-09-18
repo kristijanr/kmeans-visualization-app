@@ -199,7 +199,7 @@ export function initializeEyeData(dataPointAmount) {
     const eyeWidth = dataPointAmount;
     const eyeHeight = dataPointAmount * 0.5;
 
-    const irisRadius = 5;
+    const irisRadius = dataPointAmount / 10;
     
     let data = [];
 
