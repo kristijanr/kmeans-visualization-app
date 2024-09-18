@@ -8,8 +8,8 @@ export const svgAttributes = {
     height: 600
 };
 
-function addJitter(value) {
-    return value + Math.floor(Math.random() * 3);
+function addJitter(value, dataPointAmount) {
+    return value + Math.floor(Math.random() * (dataPointAmount / 50));
 }
 
 function euclideanDistance(a, b) {
@@ -149,8 +149,8 @@ export function initializeConcentricData(dataPointAmount, circleAmount) {
         for (let j = 0; j < pointsPerCircle; j++) {
             const angle = j * angleIncrement;
             data.push({
-                x: addJitter((centerX + radius * Math.cos(angle)) / 10),
-                y: addJitter((centerY + radius * Math.sin(angle)) / 10),
+                x: addJitter((centerX + radius * Math.cos(angle)) / 10, dataPointAmount),
+                y: addJitter((centerY + radius * Math.sin(angle)) / 10, dataPointAmount),
                 cluster: null
             });
         }
@@ -172,8 +172,8 @@ export function initializeCrescentData(dataPointAmount) {
         let x = centerX + maxRadius * Math.cos(theta);
         let y = centerY + maxRadius * Math.sin(theta);
         data.push({ 
-            x: addJitter(x),
-            y: addJitter(y),
+            x: addJitter(x, dataPointAmount),
+            y: addJitter(y, dataPointAmount),
             cluster: null
         });
     }
@@ -183,8 +183,8 @@ export function initializeCrescentData(dataPointAmount) {
         let x = (dataPointAmount / 5) + centerX + maxRadius * Math.cos(theta);
         let y = centerY + maxRadius * Math.sin(theta);
         data.push({ 
-            x: addJitter(x),
-            y: addJitter(y),
+            x: addJitter(x, dataPointAmount),
+            y: addJitter(y, dataPointAmount),
             cluster: null
         });
     }
@@ -216,8 +216,8 @@ export function initializeEyeData(dataPointAmount) {
         const x = centerX + r * Math.cos(angle);
         const y = centerY + (r * Math.sin(angle) * (eyeHeight / eyeWidth));
         data.push({
-            x: addJitter(x),
-            y: addJitter(y),
+            x: addJitter(x, dataPointAmount),
+            y: addJitter(y, dataPointAmount),
             cluster: null
         });
     }
@@ -230,8 +230,8 @@ export function initializeEyeData(dataPointAmount) {
         const x = centerX + r * Math.cos(angle);
         const y = centerY + r * Math.sin(angle);
         data.push({
-            x: addJitter(x),
-            y: addJitter(y),
+            x: addJitter(x, dataPointAmount),
+            y: addJitter(y, dataPointAmount),
             cluster: null
         });
     }

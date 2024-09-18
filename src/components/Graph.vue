@@ -1,11 +1,14 @@
 <template>
   <div class="wrapper">
     <div id="container"></div>
-    <div class="controls" v-if="false">
-      <v-btn class="rounded"variant="outlined" icon="mdi-chevron-double-left" color="primary"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary"/>
+
+    <div class="controls">
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-left" color="primary" @click="firstStep()" :disabled="isFinished"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary" @click="previousStep()" :disabled="isFinished"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary" @click="nextStep()" :disabled="isFinished"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary" @click="lastStep()" :disabled="isFinished"/>
+
+      <v-icon v-if="isFinished" icon="mdi-alert-circle-outline" color="warning" v-tooltip:end="'Step by step controls are enabled when the algorithm has finished'" />
     </div>
   </div>
 
@@ -73,6 +76,11 @@ import {
   initializeEyeData
 } from "../utils/kmeans-helpers.js";
 import {debounce, isFinite} from 'lodash';
+import { mapActions, mapState } from "pinia";
+
+import { useStepsStore } from "../utils/store/stepsStore.js";
+
+//TODO: add step-by-step function, add centroid choosing on canvas
 
 const DEFAULT_DATA_AMOUNT = 100;
 const DEFAULT_CLUSTER_AMOUNT = 3;
@@ -92,6 +100,12 @@ export default {
       centroids: [],
       dataPoints: [],
       previousCentroids: [],
+      step: 0,
+
+      manualMode: false,
+
+      currentStepIndex: 0,
+      stoppedOnStep: 0,
 
       //Needed DOM elements
       domNodes: null,
@@ -136,22 +150,40 @@ export default {
   },
 
   computed: {
+    ...mapState(useStepsStore, ['steps', 'centroidsStep']),
+
     isConverged() {
-      for (let i = 0; i < this.centroids.length; i++) {
-        const current = this.centroids[i];
-        const previous = this.previousCentroids[i];
-
-        if (Math.abs(current.x - previous.x) > CONVERGENCE_THRESHOLD ||
-            Math.abs(current.y - previous.y) > CONVERGENCE_THRESHOLD) {
-
-          return false;
+      if(this.previousCentroids.length && this.centroids.length){
+        for (let i = 0; i < this.centroids.length; i++) {
+          const current = this.centroids[i];
+          const previous = this.previousCentroids[i];
+  
+          if (Math.abs(current.x - previous.x) > CONVERGENCE_THRESHOLD ||
+              Math.abs(current.y - previous.y) > CONVERGENCE_THRESHOLD) {
+  
+            return false;
+          }
         }
+        return true;
       }
-      return true;
+
+      return false;
+    },
+
+    currentStep() {
+      return this.steps.filter(step => step.step === this.currentStepIndex) || [];
+    },
+
+    currentCentroids() {
+      return this.centroidsStep.filter(centroid => centroid.step === this.currentStepIndex) || [];
     },
 
     isRunning() {
       return !!this.interval;
+    },
+
+    isFinished() {
+      return !this.manualMode && !(this.isConverged || this.step + 1 === parseInt(this.iterationAmount)) || this.isRunning;
     },
 
     distributionOptions() {
@@ -218,6 +250,9 @@ export default {
 
     //Initially set up the iteration helper
     this.iterationHelper = this.iterationAmount;
+
+    //Clear previous stored steps
+    this.emptyStore();
   },
 
   mounted() {
@@ -228,6 +263,8 @@ export default {
   },
 
   methods: {
+    ...mapActions(useStepsStore, ['addStep', 'addCentroid', 'emptyStore']),
+
     initData(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT, distribution = DEFAULT_DISTRIBUTION) {
       const centroids = initializeCentroids(clusterCount, dataPointsCount);
       let data = [];
@@ -363,7 +400,9 @@ export default {
     },
 
     updateClusters() {
-
+      this.dataPoints.forEach((dataPoint) => {
+        this.addStep({ x: dataPoint.x, y: dataPoint.y, cluster: dataPoint.cluster, step: this.step });
+      });
       this.dataPoints.forEach((dataPoint) => {
         dataPoint.cluster = nearestCentroid(dataPoint, this.centroids);
 
@@ -379,6 +418,8 @@ export default {
           centroid.x = average(cluster.map(node => node.x));
           centroid.y = average(cluster.map(node => node.y));
         }
+
+        this.addCentroid({ x: centroid.x, y: centroid.y, step: this.step })
       });
 
       this.domCentroids
@@ -407,12 +448,15 @@ export default {
 
           this.toastMessage = 'Reached maximum iterations';
           this.showHideToast();
-
+          
+          this.stoppedOnStep = this.step - 1;
+          this.step = 0;
           return;
         }
 
         this.updateCentroids();
         this.updateClusters();
+        this.step++;
         this.drawVoronoi();
 
         if (this.isConverged) {
@@ -421,17 +465,22 @@ export default {
 
           this.toastMessage = `Converged after ${this.iterationAmount - this.iterationHelper} iterations`;
           this.showHideToast();
-
+          
+          this.stoppedOnStep = this.step - 1;
+          this.step = 0;
           return;
         }
 
         this.previousCentroids = this.centroids.map(c => ({x: c.x, y: c.y}));
+        
+        this.currentStepIndex = this.step;
         this.iterationHelper--;
       }, this.iterationSpeed * 1000);
     },
 
     stop() {
       if (this.interval) {
+        this.manualMode = false;
         clearInterval(this.interval);
         this.interval = null;
 
@@ -441,6 +490,11 @@ export default {
     },
 
     reset() {
+      this.manualMode = false;
+      this.emptyStore();
+      this.currentStepIndex = 0;
+      this.stoppedOnStep = 0;
+      this.iterationHelper = this.iterationAmount;
       clearInterval(this.interval);
       this.interval = null;
 
@@ -490,6 +544,56 @@ export default {
       this.toast = !this.toast;
     },
 
+    updateGraphStep() {
+      if (this.currentStep.length === 0) return;
+
+      // Update data points
+      this.dataPoints = this.currentStep.map(point => ({
+        x: point.x,
+        y: point.y,
+        cluster: point.cluster
+      }));
+
+      // Update centroids
+      this.centroids = this.currentCentroids.map(centroid => ({
+        x: centroid.x,
+        y: centroid.y
+      }));
+
+
+      this.drawDataPoints();
+      this.drawCentroids();
+      this.drawVoronoi();
+    },
+
+    firstStep() {
+      this.manualMode = true;
+      this.currentStepIndex = 0;
+      this.updateGraphStep();
+    },
+
+    lastStep() {
+      this.manualMode = true;
+      this.currentStepIndex = this.stoppedOnStep;
+      this.updateGraphStep();
+    },
+
+    nextStep() {
+      this.manualMode = true;
+      if(this.currentStepIndex !== this.stoppedOnStep) {
+        this.currentStepIndex++;
+        this.updateGraphStep();
+      }
+    },
+
+    previousStep() {
+      this.manualMode = true;
+      if(this.currentStepIndex !== 0) {
+        this.currentStepIndex--;
+        this.updateGraphStep();
+      }
+    },
+
     resetInputs() {
       this.clusterAmount = DEFAULT_CLUSTER_AMOUNT;
       this.dataPointsAmount = DEFAULT_DATA_AMOUNT;
@@ -499,6 +603,8 @@ export default {
       this.circleRadius = DEFAULT_RADIUS;
       this.gaussianVariance = DEFAULT_VARIANCE;
       this.iterationSpeed = DEFAULT_SPEED;
+
+      this.emptyStore();
     },
 
     // Debounced (delayed) functions
@@ -510,6 +616,7 @@ export default {
 
       this.drawDataPoints();
       this.drawCentroids();
+      this.emptyStore()
     }, 500),
 
     onChange: debounce(function () {
@@ -518,6 +625,7 @@ export default {
 
       this.drawDataPoints();
       this.drawCentroids();
+      this.emptyStore()
     }, 500),
   }
 }
