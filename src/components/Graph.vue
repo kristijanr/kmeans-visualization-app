@@ -1,43 +1,53 @@
 <template>
   <div class="wrapper">
-    <div id="container"></div>
+    <div id="container" :class="manualCentroidMode && !isRunning && 'crossCursor'"></div>
 
     <div class="controls">
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-left" color="primary" @click="firstStep()" :disabled="isFinished"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary" @click="previousStep()" :disabled="isFinished"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary" @click="nextStep()" :disabled="isFinished"/>
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary" @click="lastStep()" :disabled="isFinished"/>
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-left" color="primary" @click="firstStep()"
+        :disabled="isFinished" />
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary" @click="previousStep()"
+        :disabled="isFinished" />
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary" @click="nextStep()"
+        :disabled="isFinished" />
+      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary" @click="lastStep()"
+        :disabled="isFinished" />
 
-      <v-icon v-if="isFinished" icon="mdi-alert-circle-outline" color="warning" v-tooltip:end="'Step by step controls are enabled when the algorithm has finished'" />
+      <v-icon v-if="isFinished" icon="mdi-alert-circle-outline" color="warning"
+        v-tooltip:end="'Step by step controls are enabled when the algorithm has finished'" />
     </div>
   </div>
 
   <div class="inputs">
-    <v-switch v-model="displayVoronoi" label="Display Voronoi borders"
-              :color="displayVoronoi ? 'primary' : 'error'"/>
+    <v-switch v-model="displayVoronoi" color="primary" label="Display Voronoi borders" />
+    <v-switch v-model="manualCentroidMode" color="success"
+      :label="manualCentroidMode ? 'Centroid selection mode: Manual' : 'Centroid selection mode: Auto'" />
 
     <v-form ref="form" validate-on="input">
-      <v-text-field v-model="iterationSpeed" label="Iteration speed (seconds)"
-      :disabled="isRunning"
-      placeholder="Enter iteration speed in seconds"
-      :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"/>
+      <v-text-field v-model="iterationSpeed" label="Iteration speed (seconds)" :disabled="isRunning"
+        placeholder="Enter iteration speed in seconds"
+        :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
 
-      <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="[rules.required, rules.mustBeInteger]"/>
-  
-      <v-text-field v-model="dataPointsAmount" label="Amount of data points" :rules="[rules.required, rules.mustBeInteger]"/>
-  
-      <v-text-field v-model="iterationAmount" label="Maximum amount of iterations" :rules="[rules.required, rules.mustBeInteger]"/>
-  
+      <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="[rules.required, rules.mustBeInteger]" />
+
+      <v-text-field v-model="dataPointsAmount" label="Amount of data points"
+        :rules="[rules.required, rules.mustBeInteger]" />
+
+      <v-text-field v-model="iterationAmount" label="Maximum amount of iterations"
+        :rules="[rules.required, rules.mustBeInteger]" />
+
       <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
 
       <div v-if="isCircularData || isConcentricData" class="circularInputs">
-        <v-text-field class="amountInput" v-model="circleAmount" label="Amount of circles" :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]"/>
-        <v-text-field v-if="isCircularData" class="radiusInput" v-model="circleRadius" label="Circle radius" :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]"/>
+        <v-text-field class="amountInput" v-model="circleAmount" label="Amount of circles"
+          :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]" />
+        <v-text-field v-if="isCircularData" class="radiusInput" v-model="circleRadius" label="Circle radius"
+          :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]" />
       </div>
 
-      <v-text-field v-if="isGaussianData" v-model="gaussianVariance" label="Variance" :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"/>
+      <v-text-field v-if="isGaussianData" v-model="gaussianVariance" label="Variance"
+        :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
     </v-form>
-    
+
     <div class="buttons">
       <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning"> Start</v-btn>
 
@@ -45,7 +55,10 @@
 
       <v-btn variant="outlined" color="warning" @click="reset"> Reset</v-btn>
 
-      <v-btn class="resetButton" variant="text" color="primary" @click="resetInputs" :disabled="isRunning"> Reset inputs</v-btn>
+      <div>
+        <ProjectInfo/>
+        <v-btn variant="text" color="warning" @click="resetInputs" :disabled="isRunning"> Reset inputs</v-btn>
+      </div>
     </div>
 
     <v-snackbar v-model="toast" :timeout="timeout">
@@ -75,12 +88,13 @@ import {
   initializeCrescentData,
   initializeEyeData
 } from "../utils/kmeans-helpers.js";
-import {debounce, isFinite} from 'lodash';
+import { debounce, isFinite } from 'lodash';
 import { mapActions, mapState } from "pinia";
 
 import { useStepsStore } from "../utils/store/stepsStore.js";
+import { useHelperStore } from "../utils/store/helperStore.js";
 
-//TODO: add step-by-step function, add centroid choosing on canvas
+import ProjectInfo from "./ProjectInfo.vue";
 
 const DEFAULT_DATA_AMOUNT = 100;
 const DEFAULT_CLUSTER_AMOUNT = 3;
@@ -102,7 +116,10 @@ export default {
       previousCentroids: [],
       step: 0,
 
-      manualMode: false,
+      manualStepMode: false,
+
+      manualCentroidMode: false,
+      manualCentroidCount: 0,
 
       currentStepIndex: 0,
       stoppedOnStep: 0,
@@ -149,18 +166,23 @@ export default {
     }
   },
 
+  components: {
+    ProjectInfo
+  },
+
   computed: {
     ...mapState(useStepsStore, ['steps', 'centroidsStep']),
+    ...mapState(useHelperStore, ['initialCentroids']),
 
     isConverged() {
-      if(this.previousCentroids.length && this.centroids.length){
+      if (this.previousCentroids.length && this.centroids.length) {
         for (let i = 0; i < this.centroids.length; i++) {
           const current = this.centroids[i];
           const previous = this.previousCentroids[i];
-  
+
           if (Math.abs(current.x - previous.x) > CONVERGENCE_THRESHOLD ||
-              Math.abs(current.y - previous.y) > CONVERGENCE_THRESHOLD) {
-  
+            Math.abs(current.y - previous.y) > CONVERGENCE_THRESHOLD) {
+
             return false;
           }
         }
@@ -183,7 +205,7 @@ export default {
     },
 
     isFinished() {
-      return !this.manualMode && !(this.isConverged || this.step + 1 === parseInt(this.iterationAmount)) || this.isRunning;
+      return !this.manualStepMode && !(this.isConverged || this.step + 1 === parseInt(this.iterationAmount)) || this.isRunning;
     },
 
     distributionOptions() {
@@ -200,7 +222,7 @@ export default {
 
     isConcentricData() {
       return this.distribution == 'Concentric'
-    }
+    },
   },
   watch: {
     'dataPointsAmount'(value) {
@@ -239,6 +261,14 @@ export default {
     'circleRadius'() {
       this.onChange();
     },
+
+    'manualCentroidMode'(value) {
+      if (value) {
+        this.enableManualCentroidMode();
+      } else {
+        this.restoreInitialCentroids();
+      }
+    },
   },
 
   beforeMount() {
@@ -264,6 +294,7 @@ export default {
 
   methods: {
     ...mapActions(useStepsStore, ['addStep', 'addCentroid', 'emptyStore']),
+    ...mapActions(useHelperStore, ['setInitialCentroids', 'clearInitialCentroids']),
 
     initData(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT, distribution = DEFAULT_DISTRIBUTION) {
       const centroids = initializeCentroids(clusterCount, dataPointsCount);
@@ -283,7 +314,7 @@ export default {
       }
 
       if (distribution === 'Grid') {
-        data = initializeGridData(dataPointsCount, clusterCount);
+        data = initializeGridData(dataPointsCount);
       }
 
       if (distribution === 'Concentric') {
@@ -298,6 +329,10 @@ export default {
         data = initializeEyeData(dataPointsCount);
       }
 
+      if (!this.initialCentroids.length) {
+        this.setInitialCentroids(centroids);
+      }
+
       this.centroids = centroids;
       this.dataPoints = data;
     },
@@ -310,16 +345,80 @@ export default {
     },
 
     drawGraph() {
-      this.graphContainer = d3.select('#container')
-          .append('svg')
-          .attr('viewBox', `${svgAttributes.x} ${svgAttributes.y} ${svgAttributes.height} ${svgAttributes.width}`)
-          .attr('width', `${svgAttributes.width}`)
-          .attr('height', `${svgAttributes.height}`)
-          .append('g')
-          .attr('transform', 'translate(-10, 50)')
-          .attr('color', '#e6e8ea')
-          .attr('stroke-width', 4);
+      const svg = this.graphContainer = d3.select('#container')
+        .append('svg')
+        .attr('viewBox', `${svgAttributes.x} ${svgAttributes.y} ${svgAttributes.height} ${svgAttributes.width}`)
+        .attr('width', `${svgAttributes.width}`)
+        .attr('height', `${svgAttributes.height}`)
+        .append('g')
+        .attr('transform', 'translate(-10, 50)')
+        .attr('color', '#e6e8ea')
+        .attr('stroke-width', 4)
 
+      // Elements to catch clicks in graphing area
+      svg.append('rect')
+        .attr('width', svgAttributes.width)
+        .attr('height', svgAttributes.height)
+        .attr('fill', 'transparent')
+        .style('pointer-events', 'all')
+        .on('click', (event) => {
+          let [x, y] = d3.pointer(event);
+          this.handleGraphClick(x, y);
+        });
+
+    },
+
+    handleGraphClick(x, y) {
+      if (this.manualCentroidMode) {
+        const xScale = d3.scaleLinear()
+          .domain([0, svgAttributes.width - 10])
+          .range([0, this.dataPointsAmount]);
+
+        const yScale = d3.scaleLinear()
+          .domain([svgAttributes.height, 0])
+          .range([0, this.dataPointsAmount]);
+
+        const clickX = xScale(x).toFixed(2);
+        const clickY = yScale(y).toFixed(2);
+
+        if (this.manualCentroidCount === parseInt(this.clusterAmount)) {
+          this.toastMessage = 'All centroids placed. You can now start the algorithm.';
+          this.showHideToast();
+        } else {
+          this.addManualCentroid(clickX, clickY);
+        }
+      }
+    },
+
+    addManualCentroid(x, y) {
+      this.centroids.push({ x, y });
+      this.manualCentroidCount++;
+      this.drawCentroids();
+      this.drawVoronoi();
+    },
+
+    restoreInitialCentroids() {
+      if (this.initialCentroids.length > 0) {
+        this.centroids = this.initialCentroids;
+        this.manualCentroidCount = 0;
+        this.drawCentroids();
+        this.drawVoronoi();
+        this.showHideToast();
+      } else {
+        this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+        this.drawCentroids();
+        this.drawVoronoi();
+      }
+    },
+
+    enableManualCentroidMode() {
+      this.reset();
+      this.manualCentroidMode = true;
+      this.manualCentroidCount = 0;
+      this.centroids = [];
+      this.drawCentroids();
+      this.toastMessage = `Click on the graph to place ${this.clusterAmount} centroids.`;
+      this.showHideToast();
     },
 
     drawAxis() {
@@ -327,16 +426,16 @@ export default {
 
       // Draw X axis
       this.graphContainer.append('g')
-          .attr('transform', `translate(0, ${svgAttributes.height})`)
-          .call(d3.axisBottom(this.xLinearScale).tickPadding(10).ticks(this.dataPointsAmount / (this.clusterAmount ** 2)))
-          .attr('font-size', '18px')
-          .attr('font-weight', 'bold');
+        .attr('transform', `translate(0, ${svgAttributes.height})`)
+        .call(d3.axisBottom(this.xLinearScale).tickPadding(10).ticks(this.dataPointsAmount / (this.clusterAmount ** 2)))
+        .attr('font-size', '18px')
+        .attr('font-weight', 'bold');
 
       // Draw Y axis
       this.graphContainer.append('g')
-          .call(d3.axisLeft(this.yLinearScale).tickPadding(10).ticks(this.dataPointsAmount / (this.clusterAmount ** 2)))
-          .attr('font-size', '18px')
-          .attr('font-weight', 'bold');
+        .call(d3.axisLeft(this.yLinearScale).tickPadding(10).ticks(this.dataPointsAmount / (this.clusterAmount ** 2)))
+        .attr('font-size', '18px')
+        .attr('font-weight', 'bold');
     },
 
     drawDataPoints() {
@@ -344,18 +443,18 @@ export default {
       this.graphContainer.selectAll('#nodes').remove();
 
       this.graphContainer.append('g')
-          .attr('id', 'nodes')
-          .selectAll('circle')
-          .data(this.dataPoints)
-          .enter()
-          .append('circle')
-          .attr('class', 'node')
-          .attr('cx', (node) => this.xLinearScale(node.x))
-          .attr('cy', (node) => this.yLinearScale(node.y))
-          .attr('r', 6)
-          .attr('stroke', '#e6e8ea')
-          .attr('stroke-width', 2)
-          .attr('fill', (node) => COLOUR(node.cluster));
+        .attr('id', 'nodes')
+        .selectAll('circle')
+        .data(this.dataPoints)
+        .enter()
+        .append('circle')
+        .attr('class', 'node')
+        .attr('cx', (node) => this.xLinearScale(node.x))
+        .attr('cy', (node) => this.yLinearScale(node.y))
+        .attr('r', 6)
+        .attr('stroke', '#e6e8ea')
+        .attr('stroke-width', 2)
+        .attr('fill', (node) => COLOUR(node.cluster));
 
       this.domNodes = d3.selectAll('.node');
     },
@@ -365,18 +464,18 @@ export default {
       this.graphContainer.selectAll('#centroids').remove();
 
       this.graphContainer.append('g')
-          .attr('id', 'centroids')
-          .selectAll('circle')
-          .data(this.centroids)
-          .enter()
-          .append('circle')
-          .attr('class', 'centroid')
-          .attr('cx', (centroid) => this.xLinearScale(centroid.x))
-          .attr('cy', (centroid) => this.yLinearScale(centroid.y))
-          .attr('r', 10)
-          .attr('stroke', 'white')
-          .attr('stroke-width', 4)
-          .attr('fill', (_, index) => COLOUR(index));
+        .attr('id', 'centroids')
+        .selectAll('circle')
+        .data(this.centroids)
+        .enter()
+        .append('circle')
+        .attr('class', 'centroid')
+        .attr('cx', (centroid) => this.xLinearScale(centroid.x))
+        .attr('cy', (centroid) => this.yLinearScale(centroid.y))
+        .attr('r', 10)
+        .attr('stroke', 'white')
+        .attr('stroke-width', 4)
+        .attr('fill', (_, index) => COLOUR(index));
 
       this.domCentroids = d3.selectAll('.centroid');
     },
@@ -385,24 +484,21 @@ export default {
       this.graphContainer.selectAll('.voronoi').remove(); // Remove previous Voronoi cells
 
       let voronoi = d3.Delaunay
-          .from(this.centroids, c => this.xLinearScale(c.x), c => this.yLinearScale(c.y))
-          .voronoi([0, 0, svgAttributes.width, svgAttributes.height]);
+        .from(this.centroids, c => this.xLinearScale(c.x), c => this.yLinearScale(c.y))
+        .voronoi([0, 0, svgAttributes.width, svgAttributes.height]);
 
       this.graphContainer.selectAll('.voronoi')
-          .data(voronoi.cellPolygons())
-          .enter()
-          .append('path')
-          .attr('class', 'voronoi')
-          .attr('stroke', this.displayVoronoi ? 'red' : 'none') // if we should display voronoi, apply the red stroke, else no stroke
-          .attr('stroke-width', '2px')
-          .attr('fill', 'none')
-          .attr('d', d => `M${d.join('L')}Z`)
+        .data(voronoi.cellPolygons())
+        .enter()
+        .append('path')
+        .attr('class', 'voronoi')
+        .attr('stroke', this.displayVoronoi ? 'red' : 'none') // if we should display voronoi, apply the red stroke, else no stroke
+        .attr('stroke-width', '2px')
+        .attr('fill', 'none')
+        .attr('d', d => `M${d.join('L')}Z`)
     },
 
     updateClusters() {
-      this.dataPoints.forEach((dataPoint) => {
-        this.addStep({ x: dataPoint.x, y: dataPoint.y, cluster: dataPoint.cluster, step: this.step });
-      });
       this.dataPoints.forEach((dataPoint) => {
         dataPoint.cluster = nearestCentroid(dataPoint, this.centroids);
 
@@ -418,14 +514,12 @@ export default {
           centroid.x = average(cluster.map(node => node.x));
           centroid.y = average(cluster.map(node => node.y));
         }
-
-        this.addCentroid({ x: centroid.x, y: centroid.y, step: this.step })
       });
 
       this.domCentroids
-          .transition().duration(500)
-          .attr('cx', c => this.xLinearScale(c.x))
-          .attr('cy', c => this.yLinearScale(c.y));
+        .transition().duration(500)
+        .attr('cx', c => this.xLinearScale(c.x))
+        .attr('cy', c => this.yLinearScale(c.y));
     },
 
     async start() {
@@ -436,9 +530,14 @@ export default {
 
         return;
       }
+      
+      this.updateStoreCentroids();
 
-      this.previousCentroids = this.centroids.map(c => ({x: c.x, y: c.y}));
+      this.previousCentroids = this.centroids.map(c => ({ x: c.x, y: c.y }));
       this.updateClusters();
+
+      this.updateStoreDataPoints();
+
       this.drawVoronoi();
 
       this.interval = setInterval(() => {
@@ -448,15 +547,19 @@ export default {
 
           this.toastMessage = 'Reached maximum iterations';
           this.showHideToast();
-          
+
           this.stoppedOnStep = this.step - 1;
           this.step = 0;
           return;
         }
 
-        this.updateCentroids();
-        this.updateClusters();
         this.step++;
+        this.updateCentroids();
+        this.updateStoreCentroids();
+
+        this.updateClusters();
+        this.updateStoreDataPoints();
+
         this.drawVoronoi();
 
         if (this.isConverged) {
@@ -465,14 +568,14 @@ export default {
 
           this.toastMessage = `Converged after ${this.iterationAmount - this.iterationHelper} iterations`;
           this.showHideToast();
-          
+
           this.stoppedOnStep = this.step - 1;
           this.step = 0;
           return;
         }
 
-        this.previousCentroids = this.centroids.map(c => ({x: c.x, y: c.y}));
-        
+        this.previousCentroids = this.centroids.map(c => ({ x: c.x, y: c.y }));
+
         this.currentStepIndex = this.step;
         this.iterationHelper--;
       }, this.iterationSpeed * 1000);
@@ -480,7 +583,7 @@ export default {
 
     stop() {
       if (this.interval) {
-        this.manualMode = false;
+        this.manualStepMode = false;
         clearInterval(this.interval);
         this.interval = null;
 
@@ -490,10 +593,14 @@ export default {
     },
 
     reset() {
-      this.manualMode = false;
+      this.clearInitialCentroids();
+      this.manualStepMode = false;
       this.emptyStore();
       this.currentStepIndex = 0;
       this.stoppedOnStep = 0;
+
+      this.manualCentroidMode = false;
+      this.manualCentroidCount = 0;
       this.iterationHelper = this.iterationAmount;
       clearInterval(this.interval);
       this.interval = null;
@@ -501,43 +608,55 @@ export default {
       this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
 
       this.domNodes = this.graphContainer.select('#nodes')
-          .selectAll('.node')
-          .data(this.dataPoints)
-          .join(
-              enter => enter.append('circle')
-                  .attr('class', 'node')
-                  .attr('cx', (node) => this.xLinearScale(node.x))
-                  .attr('cy', (node) => this.yLinearScale(node.y))
-                  .attr('r', 5)
-                  .attr('stroke', 'white')
-                  .attr('stroke-width', 2)
-                  .attr('fill', (node) => COLOUR(node.cluster)),
-              update => update.transition().duration(500)
-                  .attr('cx', (node) => this.xLinearScale(node.x))
-                  .attr('cy', (node) => this.yLinearScale(node.y))
-                  .style('fill', (node) => COLOUR(node.cluster)),
-              exit => exit.remove()
-          );
+        .selectAll('.node')
+        .data(this.dataPoints)
+        .join(
+          enter => enter.append('circle')
+            .attr('class', 'node')
+            .attr('cx', (node) => this.xLinearScale(node.x))
+            .attr('cy', (node) => this.yLinearScale(node.y))
+            .attr('r', 5)
+            .attr('stroke', 'white')
+            .attr('stroke-width', 2)
+            .attr('fill', (node) => COLOUR(node.cluster)),
+          update => update.transition().duration(500)
+            .attr('cx', (node) => this.xLinearScale(node.x))
+            .attr('cy', (node) => this.yLinearScale(node.y))
+            .style('fill', (node) => COLOUR(node.cluster)),
+          exit => exit.remove()
+        );
 
       this.domCentroids = this.graphContainer.select('#centroids')
-          .selectAll('.centroid')
-          .data(this.centroids)
-          .join(
-              enter => enter.append('circle')
-                  .attr('class', 'centroid')
-                  .attr('cx', (centroid) => this.xLinearScale(centroid.x))
-                  .attr('cy', (centroid) => this.yLinearScale(centroid.y))
-                  .attr('r', 10)
-                  .attr('stroke', 'white')
-                  .attr('stroke-width', 4)
-                  .attr('fill', (_, index) => COLOUR(index)),
-              update => update.transition().duration(500)
-                  .attr('cx', (centroid) => this.xLinearScale(centroid.x))
-                  .attr('cy', (centroid) => this.yLinearScale(centroid.y)),
-              exit => exit.remove()
-          );
+        .selectAll('.centroid')
+        .data(this.centroids)
+        .join(
+          enter => enter.append('circle')
+            .attr('class', 'centroid')
+            .attr('cx', (centroid) => this.xLinearScale(centroid.x))
+            .attr('cy', (centroid) => this.yLinearScale(centroid.y))
+            .attr('r', 10)
+            .attr('stroke', 'white')
+            .attr('stroke-width', 4)
+            .attr('fill', (_, index) => COLOUR(index)),
+          update => update.transition().duration(500)
+            .attr('cx', (centroid) => this.xLinearScale(centroid.x))
+            .attr('cy', (centroid) => this.yLinearScale(centroid.y)),
+          exit => exit.remove()
+        );
 
       this.drawVoronoi();
+    },
+
+    updateStoreDataPoints() {
+      this.dataPoints.forEach((dataPoint) => {
+        this.addStep({ x: dataPoint.x, y: dataPoint.y, cluster: dataPoint.cluster, step: this.step });
+      });
+    },
+
+    updateStoreCentroids() {
+      this.centroids.forEach(centroid => {
+        this.addCentroid({ x: centroid.x, y: centroid.y, step: this.step })
+      });
     },
 
     showHideToast() {
@@ -567,28 +686,28 @@ export default {
     },
 
     firstStep() {
-      this.manualMode = true;
+      this.manualStepMode = true;
       this.currentStepIndex = 0;
       this.updateGraphStep();
     },
 
     lastStep() {
-      this.manualMode = true;
+      this.manualStepMode = true;
       this.currentStepIndex = this.stoppedOnStep;
       this.updateGraphStep();
     },
 
     nextStep() {
-      this.manualMode = true;
-      if(this.currentStepIndex !== this.stoppedOnStep) {
+      this.manualStepMode = true;
+      if (this.currentStepIndex !== this.stoppedOnStep) {
         this.currentStepIndex++;
         this.updateGraphStep();
       }
     },
 
     previousStep() {
-      this.manualMode = true;
-      if(this.currentStepIndex !== 0) {
+      this.manualStepMode = true;
+      if (this.currentStepIndex !== 0) {
         this.currentStepIndex--;
         this.updateGraphStep();
       }
@@ -632,9 +751,13 @@ export default {
 </script>
 
 <style scoped>
-.wrapper { 
+.wrapper {
   display: flex;
   flex-direction: column;
+}
+
+.crossCursor {
+  cursor: crosshair;
 }
 
 .controls {
@@ -652,6 +775,7 @@ export default {
   width: 300px;
 
   margin-left: 15vh;
+  margin-top: 15vh;
 }
 
 .buttons {
@@ -660,10 +784,6 @@ export default {
   flex-wrap: wrap;
 
   gap: 10px;
-}
-
-.resetButton {
-  margin: auto;
 }
 
 .circularInputs {

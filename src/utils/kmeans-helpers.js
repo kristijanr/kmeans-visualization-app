@@ -115,22 +115,28 @@ export function initializeGaussianData(dataPointAmount, clusters, varianceAmount
     return data;
 }
 
-
-export function initializeGridData(dataPointAmount, clusters) {
-    const gridSize = Math.ceil(Math.sqrt(dataPointAmount));
+export function initializeGridData(dataPointAmount) {
+    const cellScale = dataPointAmount * 0.1;
+    
     let data = [];
-
-    for (let i = 0; i < gridSize; i++) {
-        for (let j = 0; j < gridSize; j++) {
-            if (data.length >= dataPointAmount) break;
+    
+    for (let i = 0; i <= cellScale; i++) {
+        for (let j = 0; j <= cellScale; j++) {      
+            const x = i * cellScale;
+            const y = j * cellScale;
+            
             data.push({
-                x: i * (svgAttributes.width / gridSize),
-                y: j * (svgAttributes.height / gridSize),
+                x: addJitter(x, dataPointAmount),
+                y: addJitter(y, dataPointAmount),
                 cluster: null
             });
         }
-    }
 
+        if (data.length > dataPointAmount) {
+            break
+        }
+    }
+    
     return data;
 }
 
