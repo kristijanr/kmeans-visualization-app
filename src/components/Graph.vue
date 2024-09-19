@@ -755,7 +755,7 @@ export default {
   display: flex;
   flex-direction: column;
 
-  margin-top: 5vh;
+  margin-top: 3vh;
 }
 
 .crossCursor {
@@ -777,7 +777,7 @@ export default {
   width: 330px;
 
   margin-left: 10vh;
-  margin-top: 8vh;
+  margin-top: 3vh;
 }
 
 .buttons {
