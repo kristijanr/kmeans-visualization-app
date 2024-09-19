@@ -12,7 +12,7 @@ An app used to visualize the working of the K-Means clustering algorithm
 
     ```sh
     git clone https://github.com/kristijanr/kmeans-visualization-app.git
-    cd kmeans-visualization-app/kmeans
+    cd kmeans-visualization-app
     ```
 
 2. Install the dependencies:
