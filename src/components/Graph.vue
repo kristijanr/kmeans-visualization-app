@@ -754,6 +754,8 @@ export default {
 .wrapper {
   display: flex;
   flex-direction: column;
+
+  margin-top: 5vh;
 }
 
 .crossCursor {
@@ -772,10 +774,10 @@ export default {
 .inputs {
   display: flex;
   flex-direction: column;
-  width: 300px;
+  width: 330px;
 
-  margin-left: 15vh;
-  margin-top: 15vh;
+  margin-left: 10vh;
+  margin-top: 8vh;
 }
 
 .buttons {
