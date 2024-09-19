@@ -18,7 +18,7 @@
           <br/>
           <p>
             This app is an educational tool designed to illustrate the inner workings
-            of the K-means clustering algorithm while also displaying the knowlegde aquired by the creators while studying this course.
+            of the K-means clustering algorithm using a custom implementation of the algorithm in JavaScript to display the knowlegde aquired by the creators from the coursework.
           </p>
         </v-card-text>
 
