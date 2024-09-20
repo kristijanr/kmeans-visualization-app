@@ -2,16 +2,19 @@
   <div class="wrapper">
     <div id="container" :class="manualCentroidMode && !isRunning && 'crossCursor'"></div>
 
-    <div class="controls">
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-left" color="primary" @click="firstStep()"
-        :disabled="isFinished" />
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary" @click="previousStep()"
-        :disabled="isFinished" />
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary" @click="nextStep()"
-        :disabled="isFinished" />
-      <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary" @click="lastStep()"
-        :disabled="isFinished" />
+    <div class="controlsFooter">
+      <div class="controls">
+        <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-left" color="primary" @click="firstStep()"
+          :disabled="isFinished" />
+        <v-btn class="rounded" variant="outlined" icon="mdi-chevron-left" color="primary" @click="previousStep()"
+          :disabled="isFinished" />
+        <v-btn class="rounded" variant="outlined" icon="mdi-chevron-right" color="primary" @click="nextStep()"
+          :disabled="isFinished" />
+        <v-btn class="rounded" variant="outlined" icon="mdi-chevron-double-right" color="primary" @click="lastStep()"
+          :disabled="isFinished" />
+      </div>
 
+      <span v-if="!isFinished" class="stepTotal">Step {{ currentStepIndex }}   of   {{ stoppedOnStep }}</span>
       <v-icon v-if="isFinished" icon="mdi-alert-circle-outline" color="warning"
         v-tooltip:end="'Step by step controls are enabled when the algorithm has finished'" />
     </div>
@@ -23,28 +26,29 @@
       :label="manualCentroidMode ? 'Centroid selection mode: Manual' : 'Centroid selection mode: Auto'" />
 
     <v-form ref="form" validate-on="input">
-      <v-text-field v-model="iterationSpeed" label="Iteration speed (seconds)" :disabled="isRunning"
-        placeholder="Enter iteration speed in seconds"
+      <v-text-field variant="underlined" v-model="iterationSpeed" label="Iteration speed (seconds)"
+        :disabled="isRunning" placeholder="Enter iteration speed in seconds"
         :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
 
-      <v-text-field v-model="clusterAmount" label="Amount of clusters" :rules="[rules.required, rules.mustBeInteger]" />
-
-      <v-text-field v-model="dataPointsAmount" label="Amount of data points"
+      <v-text-field variant="underlined" v-model="clusterAmount" label="Amount of clusters"
         :rules="[rules.required, rules.mustBeInteger]" />
 
-      <v-text-field v-model="iterationAmount" label="Maximum amount of iterations"
+      <v-text-field variant="underlined" v-model="dataPointsAmount" label="Amount of data points"
+        :rules="[rules.required, rules.mustBeInteger]" />
+
+      <v-text-field variant="underlined" v-model="iterationAmount" label="Maximum amount of iterations"
         :rules="[rules.required, rules.mustBeInteger]" />
 
       <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
 
       <div v-if="isCircularData || isConcentricData" class="circularInputs">
-        <v-text-field class="amountInput" v-model="circleAmount" label="Amount of circles"
+        <v-text-field variant="underlined" class="amountInput" v-model="circleAmount" label="Amount of circles"
           :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]" />
-        <v-text-field v-if="isCircularData" class="radiusInput" v-model="circleRadius" label="Circle radius"
-          :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]" />
+        <v-text-field variant="underlined" v-if="isCircularData" class="radiusInput" v-model="circleRadius"
+          label="Circle radius" :rules="[rules.required, rules.mustBeInteger, rules.mustBePositive]" />
       </div>
 
-      <v-text-field v-if="isGaussianData" v-model="gaussianVariance" label="Variance"
+      <v-text-field variant="underlined" v-if="isGaussianData" v-model="gaussianVariance" label="Variance"
         :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
     </v-form>
 
@@ -56,7 +60,7 @@
       <v-btn variant="outlined" color="warning" @click="reset"> Reset</v-btn>
 
       <div>
-        <ProjectInfo/>
+        <ProjectInfo />
         <v-btn variant="text" color="warning" @click="resetInputs" :disabled="isRunning"> Reset inputs</v-btn>
       </div>
     </div>
@@ -121,6 +125,7 @@ export default {
       manualCentroidMode: false,
       manualCentroidCount: 0,
 
+      inputStepIndex: 0,
       currentStepIndex: 0,
       stoppedOnStep: 0,
 
@@ -269,6 +274,17 @@ export default {
         this.restoreInitialCentroids();
       }
     },
+
+    'currentStepIndex'(value) {
+      this.inputStepIndex = parseInt(value);
+    },
+
+    'inputStepIndex'(value) {
+      if (value >= 0 && value <= this.stop) {
+        this.currentStepIndex = parseInt(value);
+        this.updateGraphStep();
+      }
+    }
   },
 
   beforeMount() {
@@ -530,7 +546,7 @@ export default {
 
         return;
       }
-      
+
       this.updateStoreCentroids();
 
       this.previousCentroids = this.centroids.map(c => ({ x: c.x, y: c.y }));
@@ -549,6 +565,7 @@ export default {
           this.showHideToast();
 
           this.stoppedOnStep = this.step - 1;
+          this.inputStepIndex = this.getStepsNumber;
           this.step = 0;
           return;
         }
@@ -583,6 +600,7 @@ export default {
 
     stop() {
       if (this.interval) {
+        this.stoppedOnStep = this.step;
         this.manualStepMode = false;
         clearInterval(this.interval);
         this.interval = null;
@@ -598,6 +616,7 @@ export default {
       this.emptyStore();
       this.currentStepIndex = 0;
       this.stoppedOnStep = 0;
+      this.step = 0;
 
       this.manualCentroidMode = false;
       this.manualCentroidCount = 0;
@@ -666,19 +685,16 @@ export default {
     updateGraphStep() {
       if (this.currentStep.length === 0) return;
 
-      // Update data points
       this.dataPoints = this.currentStep.map(point => ({
         x: point.x,
         y: point.y,
         cluster: point.cluster
       }));
 
-      // Update centroids
       this.centroids = this.currentCentroids.map(centroid => ({
         x: centroid.x,
         y: centroid.y
       }));
-
 
       this.drawDataPoints();
       this.drawCentroids();
@@ -762,13 +778,13 @@ export default {
   cursor: crosshair;
 }
 
-.controls {
+.controlsFooter {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin: auto;
 
-  width: 350px;
+  width: 400px;
 }
 
 .inputs {
@@ -799,5 +815,15 @@ export default {
 
 .radiusInput {
   margin-left: 5px;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  width: 300px;
+}
+
+.stepTotal {
+  margin-left: 20px;
 }
 </style>
