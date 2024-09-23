@@ -26,9 +26,23 @@
       :label="manualCentroidMode ? 'Centroid selection mode: Manual' : 'Centroid selection mode: Auto'" />
 
     <v-form ref="form" validate-on="input">
-      <v-text-field variant="underlined" v-model="iterationSpeed" label="Iteration speed (seconds)"
-        :disabled="isRunning" placeholder="Enter iteration speed in seconds"
-        :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
+      <v-text-field
+          variant="underlined"
+          v-model="iterationSpeed"
+          label="Use the slider to enter iteration speed in seconds"
+          disabled
+          placeholder="Use the slider to Enter iteration speed in seconds"
+          :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"
+      />
+
+      <v-slider
+          v-model="iterationSpeed"
+          :min="0.1"
+          :max="10"
+          :step="0.1"
+          :disabled="isRunning"
+          thumb-label
+      />
 
       <v-text-field variant="underlined" v-model="clusterAmount" label="Amount of clusters"
         :rules="[rules.required, rules.mustBeInteger]" />
