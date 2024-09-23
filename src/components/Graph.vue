@@ -769,11 +769,13 @@ export default {
     }, 500),
 
     onChange: debounce(function () {
+
       this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
       this.drawVoronoi();
-
       this.drawDataPoints();
-      this.drawCentroids();
+      if (!this.manualCentroidMode){
+        this.drawCentroids();
+      }
       this.emptyStore()
     }, 500),
   }
