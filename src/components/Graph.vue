@@ -331,6 +331,10 @@ export default {
       let data = [];
 
 
+      if (!this.manualCentroidMode){
+        this.setInitialCentroids(centroids);
+        this.centroids = centroids;
+      }
       if (distribution === 'Random') {
         data = initializeRandomData(dataPointsCount);
       }
@@ -359,11 +363,10 @@ export default {
         data = initializeEyeData(dataPointsCount);
       }
 
-      if (!this.initialCentroids.length) {
-        this.setInitialCentroids(centroids);
-      }
-
-      this.centroids = centroids;
+      // if (!this.initialCentroids.length) {
+      //   this.setInitialCentroids(centroids);
+      // }
+      // this.centroids = centroids;
       this.dataPoints = data;
     },
 
