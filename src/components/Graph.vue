@@ -832,6 +832,7 @@ export default {
       this.initData(this.dataPointsAmount, this.distribution);
 
       this.drawDataPoints();
+      this.drawCentroids();
     },
     // Debounced (delayed) functions
     onDataPointAmountChange: debounce(function () {
