@@ -831,7 +831,8 @@ export default {
 
       this.drawDataPoints();
       this.drawCentroids();
-      this.emptyStore()
+      this.emptyStore();
+      this.drawEventLayer();
     }, 500),
 
     onChange: debounce(function (fromInputChange = false) {
@@ -845,7 +846,8 @@ export default {
       if (!this.manualCentroidMode) {
         this.drawCentroids();
       }
-      this.emptyStore()
+      this.emptyStore();
+      this.drawEventLayer();
     }, 500),
   }
 }
