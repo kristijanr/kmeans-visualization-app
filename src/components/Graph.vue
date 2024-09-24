@@ -50,7 +50,7 @@
       <div class="distributionData">
         <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
         <v-btn variant="plain" icon="mdi-file-restore" color="primary" v-tooltip:end="'Generate new data points'"
-        @click="generateNewData()" :disabled="isRunning" /> 
+          @click="generateNewData()" :disabled="isRunning" />
       </div>
 
 
@@ -66,7 +66,7 @@
     </v-form>
 
     <div class="buttons">
-      <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning"> Start</v-btn>
+      <v-btn variant="outlined" color="green" @click="start" :disabled="isRunning || (manualCentroidMode && !validNumOfCentroidsPlaced)"> Start</v-btn>
 
       <v-btn variant="outlined" color="red" @click="stop" :disabled="!isRunning"> Stop</v-btn>
 
@@ -241,6 +241,10 @@ export default {
     isConcentricData() {
       return this.distribution == 'Concentric'
     },
+
+    validNumOfCentroidsPlaced() {
+      return this.manualCentroidCount > 0;
+    }
   },
   watch: {
     'dataPointsAmount'(value) {
@@ -319,8 +323,8 @@ export default {
     this.drawGraph();
     this.drawAxis();
     this.drawDataPoints();
-    this.drawCentroids();
     this.drawEventLayer();
+    this.drawCentroids();
   },
 
   methods: {
@@ -531,44 +535,45 @@ export default {
         .attr('stroke-width', 4)
         .attr('fill', (_, index) => COLOUR(index));
 
-      const dragBehavior = d3.drag()
-        .on('start', function (event, d) {
-          d3.select(this).attr('stroke', 'black')
-            .style('cursor', 'grabbing');
+        const dragBehavior = d3.drag()
+          .on('start', function (event, d) {
+            d3.select(this).attr('stroke', 'black')
+              .style('cursor', 'grabbing');
 
-          // Initial position
-          d.dragStartX = d.x;
-          d.dragStartY = d.y;
-        })
-        .on('drag', function (event, d) {
-          const dx = self.xLinearScale.invert(event.x) - self.xLinearScale.invert(event.subject.x);
-          const dy = self.yLinearScale.invert(event.y) - self.yLinearScale.invert(event.subject.y);
-
-          // Calculate delta
-          d.x = d.dragStartX + dx;
-          d.y = d.dragStartY + dy;
-
-          // Draw on graph
-          d3.select(this)
-            .attr('cx', self.xLinearScale(d.x))
-            .attr('cy', self.yLinearScale(d.y))
-            .style('cursor', 'grabbing');
-
-          // Continue updating while moving points
-          self.drawVoronoi();
-        })
-        .on('end', function (event, d) {
-          d3.select(this).attr('stroke', 'white')
-            .style('cursor', 'grab');
-        });
-
-      if (this.manualCentroidMode) {
-        centroids
-          .on('mouseover', function (event, d) {
-            d3.select(this).style('cursor', 'grab')
+            // Initial position
+            d.dragStartX = d.x;
+            d.dragStartY = d.y;
           })
-          .call(dragBehavior);
-      }
+          .on('drag', function (event, d) {
+            if (!self.isRunning && !self.isConverged) {
+              console.log('drag');
+            const dx = self.xLinearScale.invert(event.x) - self.xLinearScale.invert(event.subject.x);
+            const dy = self.yLinearScale.invert(event.y) - self.yLinearScale.invert(event.subject.y);
+
+            // Calculate delta
+            d.x = d.dragStartX + dx;
+            d.y = d.dragStartY + dy;
+
+            // Draw on graph
+            d3.select(this)
+              .attr('cx', self.xLinearScale(d.x))
+              .attr('cy', self.yLinearScale(d.y))
+              .style('cursor', 'grabbing');
+
+            // Continue updating while moving points
+            self.drawVoronoi();
+            }
+          })
+          .on('end', function (event, d) {
+            d3.select(this).attr('stroke', 'white')
+              .style('cursor', 'grab');
+          });
+
+          centroids
+            .on('mouseover', function (event, d) {
+              d3.select(this).style('cursor', 'grab')
+            })
+            .call(dragBehavior);
 
       this.domCentroids = d3.selectAll('.centroid');
     },
@@ -855,11 +860,10 @@ export default {
       }
       this.drawVoronoi();
       this.drawDataPoints();
-      if (!this.manualCentroidMode) {
-        this.drawCentroids();
-      }
-      this.emptyStore();
       this.drawEventLayer();
+      this.drawCentroids();
+      this.emptyStore();
+
     }, 500),
   }
 }
