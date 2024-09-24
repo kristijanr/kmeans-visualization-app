@@ -1,6 +1,8 @@
-# K-Means Visualization
+# K-Means Visualization App
 
-An app used to visualize the working of the K-Means clustering algorithm
+An app used to visualize the working of the K-Means clustering algorithm.
+
+You can try out the app [here](https://kristijanr.github.io/kmeans-visualization-app/).
 
 # Project info
 
