@@ -1,6 +1,7 @@
 <template>
   <div class="wrapper">
-    <div id="container" :class="manualCentroidMode && !isRunning && 'crossCursor'"></div>
+    <div id="container"
+      :class="manualCentroidMode && !isRunning && manualCentroidCount < clusterAmount && 'crossCursor'"></div>
 
     <div class="controlsFooter">
       <div class="controls">
@@ -14,7 +15,7 @@
           :disabled="isFinished" />
       </div>
 
-      <span v-if="!isFinished" class="stepTotal">Step {{ currentStepIndex }}   of   {{ stoppedOnStep }}</span>
+      <span v-if="!isFinished" class="stepTotal">Step {{ currentStepIndex }} of {{ stoppedOnStep }}</span>
       <v-icon v-if="isFinished" icon="mdi-alert-circle-outline" color="warning"
         v-tooltip:end="'Step by step controls are enabled when the algorithm has finished'" />
     </div>
@@ -22,27 +23,20 @@
 
   <div class="inputs">
     <v-switch v-model="displayVoronoi" color="primary" label="Display Voronoi borders" />
-    <v-switch v-model="manualCentroidMode" color="success"
-      :label="manualCentroidMode ? 'Centroid selection mode: Manual' : 'Centroid selection mode: Auto'" />
+    <div class="centroidMode">
+      <v-switch v-model="manualCentroidMode" color="success"
+        :label="manualCentroidMode ? 'Centroid mode: Manual' : 'Centroid mode: Auto'" />
+      <v-btn variant="plain" icon="mdi-refresh" color="primary" v-tooltip:end="'Generate random centroids'"
+        @click="generateRandomCentroids()" :disabled="manualCentroidMode" />
+    </div>
 
     <v-form ref="form" validate-on="input">
-      <v-text-field
-          variant="underlined"
-          v-model="iterationSpeed"
-          label="Use the slider to enter iteration speed in seconds"
-          disabled
-          placeholder="Use the slider to Enter iteration speed in seconds"
-          :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]"
-      />
+      <v-text-field variant="underlined" v-model="iterationSpeed"
+        label="Use the slider to enter iteration speed in seconds" disabled
+        placeholder="Use the slider to Enter iteration speed in seconds"
+        :rules="[rules.required, rules.mustBeNumber, rules.mustBePositive]" />
 
-      <v-slider
-          v-model="iterationSpeed"
-          :min="0.1"
-          :max="10"
-          :step="0.1"
-          :disabled="isRunning"
-          thumb-label
-      />
+      <v-slider v-model="iterationSpeed" :min="0.1" :max="10" :step="0.1" :disabled="isRunning" thumb-label />
 
       <v-text-field variant="underlined" v-model="clusterAmount" label="Amount of clusters"
         :rules="[rules.required, rules.mustBeInteger]" />
@@ -253,7 +247,7 @@ export default {
     'clusterAmount'(value) {
       // After input change, call the re-draw function after 500ms
       this.clusterAmount = value;
-      this.onChange();
+      this.onChange(true);
     },
 
     'iterationAmount'(value) {
@@ -303,7 +297,8 @@ export default {
 
   beforeMount() {
     // Initial data
-    this.initData(this.clusterAmount, this.dataPointsAmount);
+    this.initData(this.dataPointsAmount);
+    this.initCentroids(this.clusterAmount, this.dataPointsAmount)
 
     //Setting up inital scaling and domain
     this.initScale();
@@ -320,21 +315,25 @@ export default {
     this.drawAxis();
     this.drawDataPoints();
     this.drawCentroids();
+    this.drawEventLayer();
   },
 
   methods: {
     ...mapActions(useStepsStore, ['addStep', 'addCentroid', 'emptyStore']),
     ...mapActions(useHelperStore, ['setInitialCentroids', 'clearInitialCentroids']),
 
-    initData(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT, distribution = DEFAULT_DISTRIBUTION) {
+    initCentroids(clusterCount = DEFAULT_CLUSTER_AMOUNT, dataPointsCount = DEFAULT_DATA_AMOUNT,) {
       const centroids = initializeCentroids(clusterCount, dataPointsCount);
-      let data = [];
 
-
-      if (!this.manualCentroidMode){
+      if (!this.manualCentroidMode) {
         this.setInitialCentroids(centroids);
         this.centroids = centroids;
       }
+    },
+
+    initData(dataPointsCount = DEFAULT_DATA_AMOUNT, distribution = DEFAULT_DISTRIBUTION) {
+      let data = [];
+
       if (distribution === 'Random') {
         data = initializeRandomData(dataPointsCount);
       }
@@ -344,7 +343,7 @@ export default {
       }
 
       if (distribution === 'Gaussian') {
-        data = initializeGaussianData(dataPointsCount, clusterCount, this.gaussianVariance);
+        data = initializeGaussianData(dataPointsCount, this.clusterAmount, this.gaussianVariance);
       }
 
       if (distribution === 'Grid') {
@@ -363,10 +362,6 @@ export default {
         data = initializeEyeData(dataPointsCount);
       }
 
-      // if (!this.initialCentroids.length) {
-      //   this.setInitialCentroids(centroids);
-      // }
-      // this.centroids = centroids;
       this.dataPoints = data;
     },
 
@@ -390,6 +385,24 @@ export default {
 
       // Elements to catch clicks in graphing area
       svg.append('rect')
+        .raise()
+        .attr('width', svgAttributes.width)
+        .attr('height', svgAttributes.height)
+        .attr('fill', 'transparent')
+        .style('pointer-events', 'all')
+        .on('click', (event) => {
+          let [x, y] = d3.pointer(event);
+          console.log(x, y)
+          this.handleGraphClick(x, y);
+        });
+
+    },
+
+    drawEventLayer() {
+      const svg = this.graphContainer;
+
+      svg.append('rect')
+        .raise()
         .attr('width', svgAttributes.width)
         .attr('height', svgAttributes.height)
         .attr('fill', 'transparent')
@@ -398,7 +411,6 @@ export default {
           let [x, y] = d3.pointer(event);
           this.handleGraphClick(x, y);
         });
-
     },
 
     handleGraphClick(x, y) {
@@ -414,17 +426,19 @@ export default {
         const clickX = xScale(x).toFixed(2);
         const clickY = yScale(y).toFixed(2);
 
-        if (this.manualCentroidCount === parseInt(this.clusterAmount)) {
-          this.toastMessage = 'All centroids placed. You can now start the algorithm.';
-          this.showHideToast();
-        } else {
+        if (this.manualCentroidCount < parseInt(this.clusterAmount)) {
           this.addManualCentroid(clickX, clickY);
+          if (this.manualCentroidCount === parseInt(this.clusterAmount)) {
+            this.toastMessage = 'All centroids placed. You can now start the algorithm or drag centroids to adjust their positions.';
+            this.showHideToast();
+          }
         }
       }
     },
 
     addManualCentroid(x, y) {
-      this.centroids.push({ x, y });
+      const newCentroid = { x: parseFloat(x), y: parseFloat(y) };
+      this.centroids.push(newCentroid);
       this.manualCentroidCount++;
       this.drawCentroids();
       this.drawVoronoi();
@@ -438,14 +452,13 @@ export default {
         this.drawVoronoi();
         this.showHideToast();
       } else {
-        this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+        this.initData(this.dataPointsAmount, this.distribution);
         this.drawCentroids();
         this.drawVoronoi();
       }
     },
 
     enableManualCentroidMode() {
-      this.reset();
       this.manualCentroidMode = true;
       this.manualCentroidCount = 0;
       this.centroids = [];
@@ -455,7 +468,7 @@ export default {
     },
 
     drawAxis() {
-      this.graphContainer.selectAll('g').remove(); // Remove any previous ticks before drawing axis
+      this.graphContainer.selectAll('g').remove();
 
       // Draw X axis
       this.graphContainer.append('g')
@@ -493,10 +506,13 @@ export default {
     },
 
     drawCentroids() {
+      // Get component context;
+      const self = this;
+
       // Remove previous centroids
       this.graphContainer.selectAll('#centroids').remove();
 
-      this.graphContainer.append('g')
+      const centroids = this.graphContainer.append('g')
         .attr('id', 'centroids')
         .selectAll('circle')
         .data(this.centroids)
@@ -509,6 +525,45 @@ export default {
         .attr('stroke', 'white')
         .attr('stroke-width', 4)
         .attr('fill', (_, index) => COLOUR(index));
+
+      const dragBehavior = d3.drag()
+        .on('start', function (event, d) {
+          d3.select(this).attr('stroke', 'black')
+            .style('cursor', 'grabbing');
+
+          // Initial position
+          d.dragStartX = d.x;
+          d.dragStartY = d.y;
+        })
+        .on('drag', function (event, d) {
+          const dx = self.xLinearScale.invert(event.x) - self.xLinearScale.invert(event.subject.x);
+          const dy = self.yLinearScale.invert(event.y) - self.yLinearScale.invert(event.subject.y);
+
+          // Calculate delta
+          d.x = d.dragStartX + dx;
+          d.y = d.dragStartY + dy;
+
+          // Draw on graph
+          d3.select(this)
+            .attr('cx', self.xLinearScale(d.x))
+            .attr('cy', self.yLinearScale(d.y))
+            .style('cursor', 'grabbing');
+
+          // Continue updating while moving points
+          self.drawVoronoi();
+        })
+        .on('end', function (event, d) {
+          d3.select(this).attr('stroke', 'white')
+            .style('cursor', 'grab');
+        });
+
+      if (this.manualCentroidMode) {
+        centroids
+          .on('mouseover', function (event, d) {
+            d3.select(this).style('cursor', 'grab')
+          })
+          .call(dragBehavior);
+      }
 
       this.domCentroids = d3.selectAll('.centroid');
     },
@@ -641,7 +696,8 @@ export default {
       clearInterval(this.interval);
       this.interval = null;
 
-      this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+      this.initData(this.dataPointsAmount, this.distribution);
+      this.initCentroids(this.clusterAmount, this.dataPointsAmount);
 
       this.domNodes = this.graphContainer.select('#nodes')
         .selectAll('.node')
@@ -759,9 +815,16 @@ export default {
       this.emptyStore();
     },
 
+    generateRandomCentroids() {
+      this.initCentroids(this.clusterAmount, this.dataPointsAmount);
+      this.setInitialCentroids(this.centroids);
+
+      this.drawCentroids();
+      this.drawVoronoi();
+    },
     // Debounced (delayed) functions
     onDataPointAmountChange: debounce(function () {
-      this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+      this.initData(this.dataPointsAmount, this.distribution);
       this.initScale();
       this.drawAxis();
       this.drawVoronoi();
@@ -771,12 +834,15 @@ export default {
       this.emptyStore()
     }, 500),
 
-    onChange: debounce(function () {
-
-      this.initData(this.clusterAmount, this.dataPointsAmount, this.distribution);
+    onChange: debounce(function (fromInputChange = false) {
+      this.initData(this.dataPointsAmount, this.distribution);
+      if (fromInputChange) {
+        this.initCentroids(this.clusterAmount, this.dataPointsAmount);
+        this.setInitialCentroids(this.centroids);
+      }
       this.drawVoronoi();
       this.drawDataPoints();
-      if (!this.manualCentroidMode){
+      if (!this.manualCentroidMode) {
         this.drawCentroids();
       }
       this.emptyStore()
@@ -844,5 +910,11 @@ export default {
 
 .stepTotal {
   margin-left: 20px;
+}
+
+.centroidMode {
+  display: flex;
+  justify-content: space-between;
+  padding-right: 40px;
 }
 </style>
