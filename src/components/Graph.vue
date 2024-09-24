@@ -47,7 +47,12 @@
       <v-text-field variant="underlined" v-model="iterationAmount" label="Maximum amount of iterations"
         :rules="[rules.required, rules.mustBeInteger]" />
 
-      <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
+      <div class="distributionData">
+        <v-select v-model="distribution" label="Select data distribution" :items="distributionOptions"></v-select>
+        <v-btn variant="plain" icon="mdi-file-restore" color="primary" v-tooltip:end="'Generate new data points'"
+        @click="generateNewData()" :disabled="isRunning" /> 
+      </div>
+
 
       <div v-if="isCircularData || isConcentricData" class="circularInputs">
         <v-text-field variant="underlined" class="amountInput" v-model="circleAmount" label="Amount of circles"
@@ -822,6 +827,12 @@ export default {
       this.drawCentroids();
       this.drawVoronoi();
     },
+
+    generateNewData() {
+      this.initData(this.dataPointsAmount, this.distribution);
+
+      this.drawDataPoints();
+    },
     // Debounced (delayed) functions
     onDataPointAmountChange: debounce(function () {
       this.initData(this.dataPointsAmount, this.distribution);
@@ -918,5 +929,10 @@ export default {
   display: flex;
   justify-content: space-between;
   padding-right: 40px;
+}
+
+.distributionData {
+  display: flex;
+  justify-content: space-between;
 }
 </style>
