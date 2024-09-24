@@ -829,12 +829,22 @@ export default {
       this.initCentroids(this.clusterAmount, this.dataPointsAmount);
       this.setInitialCentroids(this.centroids);
 
+      this.currentStepIndex = 0;
+      this.stoppedOnStep = 0;
+      this.step = 0;
+      this.iterationHelper = this.iterationAmount;
+
       this.drawCentroids();
       this.drawVoronoi();
     },
 
     generateNewData() {
       this.initData(this.dataPointsAmount, this.distribution);
+
+      this.currentStepIndex = 0;
+      this.stoppedOnStep = 0;
+      this.step = 0;
+      this.iterationHelper = this.iterationAmount;
 
       this.drawDataPoints();
       this.drawCentroids();
