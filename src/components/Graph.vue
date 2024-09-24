@@ -847,9 +847,9 @@ export default {
       this.drawVoronoi();
 
       this.drawDataPoints();
+      this.drawEventLayer();
       this.drawCentroids();
       this.emptyStore();
-      this.drawEventLayer();
     }, 500),
 
     onChange: debounce(function (fromInputChange = false) {
